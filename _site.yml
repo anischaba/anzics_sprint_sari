@@ -1,0 +1,24 @@
+name: "my-website"
+output_dir: "docs"
+navbar:
+  title: "SPRINT-SARI Annual report 2023"
+  left:
+    - text: "Executive Summary"
+      href: index.html
+    - text: "Methods"
+      href: methods.html
+    - text: "Results-Overall"
+      href: results_overall.html
+output:
+  html_document:
+    theme: flatly
+    css: styles.css
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_position: left
+  
+name: "my-website"
+output_dir: "docs"
+    
+    

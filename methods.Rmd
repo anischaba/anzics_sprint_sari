@@ -1,0 +1,25 @@
+---
+title: "Methods"
+---
+
+Participating sites across Australia were identified following an expression of interest to ANZICS-CTG affiliated sites, or through previous affiliation with the SPRINT SARI AUS team. The ANZICS-CTG is a well-established research network with highly experienced research coordinators familiar with conducting high quality research studies. The initial case report form (CRF) had extensive development by local and international clinical experts, and includes standardized data fields that align with our international SPRINT-SARI collaborators.
+
+Data in this report was entered by the research coordinator at the participating site. To support the rapid institution of data collection and reporting, SPRINT-SARI AUS hosts a data platform that includes an electronic data capture system, a secure repository and an analytic framework. Data are entered to a web-based REDCap data management system, securely stored, and used to inform regular reports as above. All analysis was performed by the Monash University team using Stata version 16 (Stata Corp, College Station, Tx, USA) and R statistical software (R Core Team, 2019).
+
+Descriptive statistics and bar graphs were reported in this report to summarise patient demographics and clinical characteristics for confirmed COVID-19 and non COVID SARI patients. Continuous variables have been reported with the mean and standard deviation (SD) or median and interquartile range (IQR) and frequencies and percentages have been presented for categorical variables. In some instances, categories are collapsed due to small numbers and with appropriate clinical input. Length of stay (LOS) in ICU/hospital has been reported as the observed median time from ICU/hospital admission date to ICU/hospital discharge date and the IQR is also presented as observed LOS in ICU/hospital at the 25th and 75th percentiles. Human Research Ethics Committee (HREC) approval for data collection, with a waiver of informed consent, was granted via the National Mutual Acceptance (NMA) scheme, through the Alfred (HREC/16/Alfred/59), or by separate applications to individual sites. Research Governance approval was granted by the Chief Health Officer (CHO) in South Australia and Victoria, and supported by the CHO in Queensland, under legislated public health powers. Individual site Research Governance approvals were granted at all sites where it was required.
+
+DATA
+
+The results in this report have been produced using data from the SPRINT-SARI AUS ICU COVID-19 database, Monash University.
+
+Data in this report was extracted on 2023-02-20 at 11:59h and pertains to ICU admissions in Australia reported to the SPRINT-SARI AUS ICU COVID-19 database until 2022-12-31. A total of 4908 patients of all ages have now had their data entered, from 66 sites across 6 states and 2 territories. Overall, 4729 individuals were PCR-positive or RAT-positive for COVID-19.
+
+The utmost effort has been made to ensure the highest quality data is being reported. However please note the following caveats:
+
+• The population in this report reflect the sickest patients with COVID-19 infection being managed in contributing ICUs, and do not reflect the overall population of COVID-19 positive patients.
+
+• Information is not complete for all patients.
+
+• Whenever possible, transfers were aggregated into one record.
+
+As the pandemic is ongoing and site contributions evolve, it is possible for trends and distributions to change as more data is collected with greater precision. This report is also descriptive and we urge caution in any inference particularly around causation.
