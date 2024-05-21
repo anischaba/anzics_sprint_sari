@@ -131,72 +131,136 @@ data_ssari <- data_ssari %>%
 		   corona_ieorres_2 = ifelse(phase==3 & is.na(corona_ieorres_2), 3, corona_ieorres_2)) %>%
 	mutate_at(vars(covid_vac), make_binary)
 
-# #Correct daily data#
-# custom <- function(x){
-#   x = as.Date(as.POSIXct(x, format = "%Y-%m-%d %H:%M"), tz = "")
-# }
-# test <- data_ssari %>%
-#   mutate_if(is.character, empty_to_NA) %>%
-#   filter(redcap_event_name=="dischargeoutcome_arm_1") %>%
-#   select(subjid, imv1_start, imv1_stop, ecmo1_start, ecmo1_stop, trache_start, trache_stop, hfnc_start, hfnc_stop, bipap_start, bipap_stop, cpap_start, cpap_stop, vasop_inot_start, vasop_inot_stop, dialysis_start, 
-#          dialysis_stop, prone_pos_start, prone_pos_stop) %>%
-#   mutate_at(vars(imv1_start:prone_pos_stop), custom) %>%
-#   gather(key, daily_dsstdat, imv1_start:prone_pos_stop) %>%
-#   arrange(subjid, key, daily_dsstdat) %>%
-#   mutate(variable = gsub("_start", "", key), variable = gsub("_stop", "", variable)) %>%
-#   select(-key) %>%
-#   group_by(subjid, variable) %>%
-#   mutate(daily_dsstdat = if_else(!is.na(lag(daily_dsstdat)) & (is.na(daily_dsstdat) | daily_dsstdat>date_report), date_report, daily_dsstdat)) %>%
-#   ungroup() %>%
-#   na.omit() %>%
-#   group_by(subjid, variable) %>%
-#   complete(daily_dsstdat = full_seq(daily_dsstdat, 1)) %>%
-#   ungroup() %>%
-#   arrange(subjid, variable, daily_dsstdat) %>%
-#   mutate(value = 1,
-#          variable = case_when(variable=="imv1" ~ "daily_invasive_prtrt1",
-#                               variable=="ecmo1" ~ "daily_ecmo_prtrt1",
-#                               variable=="bipap" ~ "daily_bipap_prtrt1",
-#                               variable=="cpap" ~ "daily_cpap_prtrt1",
-#                               variable=="dialysis" ~ "daily_rrt_cmtrt1",
-#                               variable=="hfnc" ~ "daily_nasaloxy_cmtrt1",
-#                               variable=="prone_pos" ~ "daily_prone_cmtrt1",
-#                               variable=="trache" ~ "daily_trach_prperf1",
-#                               variable=="vasop_inot" ~ "daily_inotrope_cmyn1", TRUE ~ NA_character_)) %>%
-#   group_by(subjid, variable) %>%
-#   filter(!duplicated(daily_dsstdat)) %>%
-#   ungroup() %>%
-#   spread(variable, value) %>%
-#   mutate(daily_dsstdat = as.character(daily_dsstdat),
-#          daily_noninvasive_prtrt1 = daily_bipap_prtrt1,
-#          daily_noninvasive_prtrt1 = ifelse(is.na(daily_noninvasive_prtrt1) & !is.na(daily_cpap_prtrt1), daily_cpap_prtrt1, daily_noninvasive_prtrt1))
-# 
-# final <- data_ssari %>%
-#   left_join(test, by = c("subjid","daily_dsstdat")) %>%
-#   mutate(daily_invasive_prtrt = ifelse(is.na(daily_invasive_prtrt) & daily_invasive_prtrt1==1, 1, daily_invasive_prtrt),
-#          daily_ecmo_prtrt = ifelse(is.na(daily_ecmo_prtrt) & daily_ecmo_prtrt1==1, 1, daily_ecmo_prtrt),
-#          daily_noninvasive_prtrt = ifelse(is.na(daily_noninvasive_prtrt) & daily_noninvasive_prtrt1==1, 1, daily_noninvasive_prtrt),
-#          daily_rrt_cmtrt = ifelse(is.na(daily_rrt_cmtrt) & daily_rrt_cmtrt1==1, 1, daily_rrt_cmtrt),
-#          daily_nasaloxy_cmtrt = ifelse(is.na(daily_nasaloxy_cmtrt) & daily_nasaloxy_cmtrt1==1, 1, daily_nasaloxy_cmtrt),
-#          daily_prone_cmtrt = ifelse(is.na(daily_prone_cmtrt) & daily_prone_cmtrt1==1, 1, daily_prone_cmtrt),
-#          daily_trach_prperf = ifelse(is.na(daily_trach_prperf) & daily_trach_prperf1==1, 1, daily_trach_prperf),
-#          daily_inotrope_cmyn = ifelse(is.na(daily_inotrope_cmyn) & daily_inotrope_cmyn1==1, 1, daily_inotrope_cmyn),
-#          daily_bipap = ifelse(is.na(daily_bipap) & daily_bipap_prtrt1==1, 1, daily_bipap),
-#          daily_cpap = ifelse(is.na(daily_cpap) & daily_cpap_prtrt1==1, 1, daily_cpap),
-#          daily_noninvasive_prtrt = ifelse((is.na(daily_noninvasive_prtrt) | daily_noninvasive_prtrt==0) & (daily_bipap==1 | daily_cpap==1), 1, daily_noninvasive_prtrt),
-#          daily_noninvasive_prtrt = ifelse(is.na(daily_noninvasive_prtrt) & !is.na(daily_bipap), daily_bipap, daily_noninvasive_prtrt),
-#          daily_noninvasive_prtrt = ifelse(is.na(daily_noninvasive_prtrt) & !is.na(daily_cpap), daily_cpap, daily_noninvasive_prtrt)) %>%
-#   select(-c(daily_bipap_prtrt1:daily_noninvasive_prtrt1))
+#Correct daily data#
+custom <- function(x){
+  x = as.Date(as.POSIXct(x, format = "%Y-%m-%d %H:%M"), tz = "")
+}
+test <- data_ssari %>%
+  mutate_if(is.character, empty_to_NA) %>%
+  filter(redcap_event_name=="dischargeoutcome_arm_1") %>%
+  select(subjid, imv1_start, imv1_stop, ecmo1_start, ecmo1_stop, trache_start, trache_stop, hfnc_start, hfnc_stop, bipap_start, bipap_stop, cpap_start, cpap_stop, vasop_inot_start, vasop_inot_stop, dialysis_start,
+         dialysis_stop, prone_pos_start, prone_pos_stop) %>%
+  mutate_at(vars(imv1_start:prone_pos_stop), custom) %>%
+  gather(key, daily_dsstdat, imv1_start:prone_pos_stop) %>%
+  arrange(subjid, key, daily_dsstdat) %>%
+  mutate(variable = gsub("_start", "", key), variable = gsub("_stop", "", variable)) %>%
+  select(-key) %>%
+  group_by(subjid, variable) %>%
+  mutate(daily_dsstdat = if_else(!is.na(lag(daily_dsstdat)) & (is.na(daily_dsstdat) | daily_dsstdat>date_report), date_report, daily_dsstdat)) %>%
+  ungroup() %>%
+  na.omit() %>%
+  group_by(subjid, variable) %>%
+  complete(daily_dsstdat = full_seq(daily_dsstdat, 1)) %>%
+  ungroup() %>%
+  arrange(subjid, variable, daily_dsstdat) %>%
+  mutate(value = 1,
+         variable = case_when(variable=="imv1" ~ "daily_invasive_prtrt1",
+                              variable=="ecmo1" ~ "daily_ecmo_prtrt1",
+                              variable=="dialysis" ~ "daily_rrt_cmtrt1",
+                              variable=="hfnc" ~ "daily_nasaloxy_cmtrt1",
+                              variable=="prone_pos" ~ "daily_prone_cmtrt1",
+                              variable=="trache" ~ "daily_trach_prperf1",
+                              variable=="vasop_inot" ~ "daily_inotrope_cmyn1", TRUE ~ NA_character_)) %>%
+  group_by(subjid, variable) %>%
+  filter(!duplicated(daily_dsstdat)) %>%
+  ungroup() %>%
+  spread(variable, value) 
+
+final <- data_ssari %>%
+  left_join(test, by = c("subjid","daily_dsstdat")) 
 ```
 
 ```{r}
 data_ssari <- data_ssari %>% 
-  mutate_at(c(grep("_mhyn", colnames(data_ssari), value = TRUE)), 
+  mutate_at(c(grep("_mhyn", colnames(data_ssari), value = TRUE), 
+              "sex", 
+              "rheumatology_mhyr"), 
             function(x) { ifelse(x == 3, NA, x)
             }) %>% 
-  mutate_at(c(grep("_mhyn", colnames(data_ssari), value = TRUE)), 
+  mutate_at(c(grep("_mhyn", colnames(data_ssari), value = TRUE), 
+              "imv_1",
+              "ecmo1",
+              "trache",
+              "rheumatology_mhyr"), 
             function(x) {ifelse(x == 2, 0, x)
-              }) 
+              }) %>%
+  mutate(pregyn_rptestcd = ifelse(!pregyn_rptestcd %in% c(0,1), NA, pregyn_rptestcd)) %>%
+  mutate(outcm_cod = case_when(outcm_cod == 1 ~ "Treatment withdrawn, prognosis poor",
+                               outcm_cod == 2 ~ "Brain injury",
+                               outcm_cod == 3 ~ "Brain death",
+                               outcm_cod == 4 ~ "Arrhythmia",
+                               outcm_cod == 5 ~ "Cardiogenic shock",
+                               outcm_cod == 6 ~ "Distributive (Septic) shock",
+                               outcm_cod == 7 ~ "Hypovolaemic shock",
+                               outcm_cod == 8 ~ "Hypoxic respiratory failure",
+                               outcm_cod == 9 ~ "Metabolic",
+                               outcm_cod == 10 ~ "Other"), 
+         dsterm = case_when(dsterm == 1 ~ "Discharged home",
+                            dsterm == 2 ~ "Transfer to other facility (acute hospital)",
+                            dsterm == 3 ~ "Transfer to another facility (rehab)",
+                            dsterm == 4 ~ "Palliative discharge",
+                            dsterm == 5 ~ "Unknown",
+                            dsterm == 6 ~ "Death"),
+         dsterm_2 = case_when(dsterm_2 == 1 ~ "Death",
+                              dsterm_2 == 2 ~ "Wards",
+                              dsterm_2 == 3 ~ "Other hospital",
+                              dsterm_2 == 4 ~ "Other rehab",
+                              dsterm_2 == 5 ~ "Home")
+         ) %>%
+  group_by(subjid) %>%
+  mutate(vasop_inot_sup = ifelse(any(daily_inotrope_cmyn == 1, na.rm = TRUE), 1, 0)) %>%
+  ungroup() 
+```
+
+```{r}
+data_ssari <- data_ssari %>% 
+  select(subjid, 
+         hostdat_icu,
+         if_other_please_specify,
+         noncovid___1,
+         noncovid___2,
+         noncovid___3,
+         noncovid___4,
+         age_estimateyears, 
+         sex, 
+         bmi_calc, 
+         obesity_mhyn,
+         pregyn_rptestcd,
+         apache_score,
+         corona_ieorres,
+         chroniccard_mhyn,
+         obesity_mhyn,
+         chronicpul_mhyn,
+         diabetes_mhyn,
+         diabetiscomp_mhyn,
+         asthma_mhyn,
+         renal_mhyn,
+         rheumatology_mhyr,
+         mildliv_mhyn,
+         modliver_mhyn,
+         dementia_mhyn,
+         malnutrition_mhyn,
+         chronicneu_mhyn,
+         malignantneo_mhyn,
+         chronhaemo_mhyn,
+         aidshiv_mhyn,
+         chrimm_mhyn,
+         imv_1,
+         dura_vm1_reportonly,
+         ecmo1,
+         prone_pos,
+         vasop_inot_sup,
+         dialysis, 
+         icu_los_reportonly,
+         hosp_los_reportonly,
+         hostdat,
+         dsstdtc,
+         dsstdtc_icudate,
+         dsterm_2,
+         dsterm,
+         outcm_cod) %>%
+  group_by(subjid) %>%
+  fill(everything(), .direction = "updown")
 ```
 
 
