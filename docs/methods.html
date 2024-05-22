@@ -60,6 +60,28 @@ if (window.hljs) {
 
 
 
+<style type="text/css">
+/* for pandoc --citeproc since 2.11 */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}
+</style>
 
 <link rel="stylesheet" href="styles.css" type="text/css" />
 
@@ -328,6 +350,15 @@ div.tocify {
 <li>
   <a href="results_overall.html">Results-Overall</a>
 </li>
+<li>
+  <a href="adults.html">Results-Adults</a>
+</li>
+<li>
+  <a href="pediatric.html">Results-Pediatric</a>
+</li>
+<li>
+  <a href="acknowledgements.html">Acknowledgements</a>
+</li>
       </ul>
       <ul class="nav navbar-nav navbar-right">
         
@@ -380,15 +411,22 @@ that align with our international SPRINT-SARI collaborators.</p>
 participating site. To support the rapid institution of data collection
 and reporting, SPRINT-SARI AUS hosts a data platform that includes an
 electronic data capture system, a secure repository and an analytic
-framework. Data are entered to a web-based REDCap data management
-system, securely stored, and used to inform regular reports as
-above.</p>
+framework. Study data were collected and managed using REDCap electronic
+data capture tools hosted at Monash University<span
+class="citation"><sup>2</sup></span>. REDCap (Research Electronic Data
+Capture) is a secure, web-based software platform designed to support
+data capture for research studies, providing 1) an intuitive interface
+for validated data capture; 2) audit trails for tracking data
+manipulation and export procedures; 3) automated export procedures for
+seamless data downloads to common statistical packages; and 4)
+procedures for data integration and interoperability with external
+sources.</p>
 <p><br />
 </p>
 </div>
 <div id="dataset-analysed" class="section level1">
 <h1>Dataset analysed</h1>
-<p>Data in this report was extracted on 2024-05-22 at 10:59h and
+<p>Data in this report was extracted on 2024-05-22 at 10:18h and
 pertains to ICU admissions in Australia reported to the SPRINT-SARI AUS
 ICU COVID-19 database until 2023-12-31.</p>
 <p><br />
@@ -398,7 +436,19 @@ ICU COVID-19 database until 2023-12-31.</p>
 <h1>Statistical analysis</h1>
 <p>Descriptive statistics have been reported as mean and standard
 deviation (SD) or median and interquartile range (IQR) and frequencies
-and percentages for categorical variables.</p>
+and percentages for categorical variables. Differences between groups
+were assessed using the chi-square test for categorical variables and
+the Wilcoxon rank sum test for continuous variables. Kaplan Meier
+survival estimates were used to describe the 30-day in-hospital
+mortality according to relevant groups of interest. All analyses were
+performed using R version 4.4.0 (R Core Team, 2023)<span
+class="citation"><sup>3</sup></span> with pakages, “dplyr”,<span
+class="citation"><sup>4</sup></span>, “ggplot2”<span
+class="citation"><sup>5</sup></span>, “ggpubr”<span
+class="citation"><sup>6</sup></span>, “forcats”, “gtsummary”<span
+class="citation"><sup>7</sup></span>, “gt”<span
+class="citation"><sup>8</sup></span>, “survival”<span
+class="citation"><sup>9</sup></span></p>
 <p><br />
 </p>
 </div>
@@ -416,6 +466,73 @@ overall population of SARI patients.</p></li>
 <li><p>Whenever possible, transfers were aggregated into one
 record.</p></li>
 </ul>
+<p> </p>
+</div>
+<div id="references" class="section level1 unnumbered">
+<h1 class="unnumbered">References</h1>
+<div id="refs" class="references csl-bib-body">
+<div id="ref-harris2009" class="csl-entry">
+<div class="csl-left-margin">1. </div><div
+class="csl-right-inline">Harris PA, Taylor R, Thielke R, Payne J,
+Gonzalez N, Conde JG. Research electronic data capture
+(REDCap)<span></span>a metadata-driven methodology and workflow process
+for providing translational research informatics support. Journal of
+Biomedical Informatics [Internet] 2009;42(2):377–81. Available from: <a
+href="https://www.sciencedirect.com/science/article/pii/S1532046408001226">https://www.sciencedirect.com/science/article/pii/S1532046408001226</a></div>
+</div>
+<div id="ref-harris2019" class="csl-entry">
+<div class="csl-left-margin">2. </div><div
+class="csl-right-inline">Harris PA, Taylor R, Minor BL, et al. The
+REDCap consortium: Building an international community of software
+platform partners. Journal of Biomedical Informatics [Internet]
+2019;95:103208. Available from: <a
+href="https://www.sciencedirect.com/science/article/pii/S1532046419301261">https://www.sciencedirect.com/science/article/pii/S1532046419301261</a></div>
+</div>
+<div id="ref-rcoreteam2023" class="csl-entry">
+<div class="csl-left-margin">3. </div><div class="csl-right-inline">R
+Core Team. R: A language and environment for statistical computing.
+2023;</div>
+</div>
+<div id="ref-wickham2023" class="csl-entry">
+<div class="csl-left-margin">4. </div><div
+class="csl-right-inline">Wickham H, François R, Henry L, Müller K,
+Vaughan D. Dplyr: A grammar of data manipulation [Internet]. 2023.
+Available from: <a
+href="https://CRAN.R-project.org/package=dplyr">https://CRAN.R-project.org/package=dplyr</a></div>
+</div>
+<div id="ref-wickham2016" class="csl-entry">
+<div class="csl-left-margin">5. </div><div
+class="csl-right-inline">Wickham H. ggplot2: Elegant graphics for data
+analysis [Internet]. Springer-Verlag New York; 2016. Available from: <a
+href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a></div>
+</div>
+<div id="ref-kassambara2023" class="csl-entry">
+<div class="csl-left-margin">6. </div><div
+class="csl-right-inline">Kassambara A. Ggpubr: ’ggplot2’ based
+publication ready plots [Internet]. 2023. Available from: <a
+href="https://CRAN.R-project.org/package=ggpubr">https://CRAN.R-project.org/package=ggpubr</a></div>
+</div>
+<div id="ref-sjoberg2021" class="csl-entry">
+<div class="csl-left-margin">7. </div><div
+class="csl-right-inline">Sjoberg DD, Whiting K, Curry M, Lavery JA,
+Larmarange J. Reproducible Summary Tables with the gtsummary Package.
+The R Journal [Internet] 2021;13(1):570–80. Available from: <a
+href="https://journal.r-project.org/archive/2021/RJ-2021-053/index.html">https://journal.r-project.org/archive/2021/RJ-2021-053/index.html</a></div>
+</div>
+<div id="ref-iannone2024" class="csl-entry">
+<div class="csl-left-margin">8. </div><div
+class="csl-right-inline">Iannone R, Cheng J, Schloerke B, Hughes E,
+Lauer A, Seo J. Gt: Easily create presentation-ready display tables
+[Internet]. 2024. Available from: <a
+href="https://CRAN.R-project.org/package=gt">https://CRAN.R-project.org/package=gt</a></div>
+</div>
+<div id="ref-therneau2024" class="csl-entry">
+<div class="csl-left-margin">9. </div><div
+class="csl-right-inline">Therneau TM. A package for survival analysis in
+r [Internet]. 2024. Available from: <a
+href="https://CRAN.R-project.org/package=survival">https://CRAN.R-project.org/package=survival</a></div>
+</div>
+</div>
 </div>
 
 

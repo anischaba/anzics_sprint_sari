@@ -263,8 +263,6 @@ data_ssari <- data_ssari %>%
   fill(everything(), .direction = "updown")
 ```
 
-
 ```{r}
 saveRDS(data_ssari, "cleaned_data/sprit_sari_annual_report_2023_dataset.rds")
 ```
-
