@@ -2,8 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+.DS_Store
 
 /raw_data
 /cleaned_data
 /docs/raw_data
 /docs/cleaned_data
+anzics_sprint_sari.Rproj
