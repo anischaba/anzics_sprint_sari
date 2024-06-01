@@ -1,0 +1,452 @@
+---
+title: "SPRINT SARI 2024 Monthly report - May"
+output:
+  word_document:
+    toc: true
+    reference_docx: "template.docx"
+date: "`r format(Sys.Date())`"
+---
+
+This report covers the period from 22^nd^ April 2024 to 31^st^ May 2024.
+
+# **Overall cohort**
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyverse)
+
+data_ssari <- readRDS("cleaned_data/sprit_sari_annual_report_2024_dataset.rds")
+
+data_ssari_year <- data_ssari %>% 
+  filter(hostdat_icu >= "2024-01-02 00:00:00") %>%
+  filter(hostdat_icu <= "2024-05-30 00:00:00")
+
+data_ssari_month <- data_ssari %>% 
+  filter(hostdat_icu >= "2024-04-21 00:00:00") %>%
+  filter(hostdat_icu <= "2024-05-30 00:00:00") 
+
+data_baseline_year <- data_ssari_year %>%
+  group_by(subjid) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(hosp_los = round(as.numeric(difftime(dsstdtc, hostdat, units = "days"))), 
+         icu_los = round(as.numeric(difftime(dsstdtc_icudate, hostdat_icu, units = "days"))))
+
+
+data_baseline_month <- data_ssari_month %>%
+  group_by(subjid) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(hosp_los = round(as.numeric(difftime(dsstdtc, hostdat, units = "days"))), 
+         icu_los = round(as.numeric(difftime(dsstdtc_icudate, hostdat_icu, units = "days"))))
+```
+
+During the study period (22^nd^ April 2024 to 31^st^ May 2024), there were **`r nrow(data_baseline_month)`** SARI patients admitted to the a participating SPRINT-SARI ICU. The cumulative number of patients in the SPRINT-SARI recorded for the year 2024 (1^st^ January to 19 May) is now **`r nrow(data_baseline_year)`**. The weekly number of SARI admissions aggregated by  calendar month is shown in the **Figure 1**. Baseline characteristics of these patients are summarised in the **Table 1**. 
+
+\
+
+```{r echo=FALSE, fig.height=8, fig.width=10, message=FALSE, warning=FALSE}
+library(ggpubr)
+data_count <- data_baseline_year %>%
+  mutate(icu_admission_week = as.numeric(round(difftime(hostdat_icu, "2024-01-01 00:00:00", units = "weeks"))) + 1) %>% 
+  group_by(icu_admission_week) %>%
+  summarise(n = n(), 
+            month = format(hostdat_icu, "%m")) %>%
+  distinct() %>% 
+  group_by(month) %>%
+  mutate(n_month = sum(n))
+  
+count <- data_count %>% select(month, n_month) %>% unique() %>% pull(n_month)
+bars <- data_count %>% select(month, icu_admission_week) %>% group_by(month) %>% summarise(n_bars = n()) %>% pull(n_bars) %>% cumsum()
+
+data_count %>%
+  ggplot(aes(x = icu_admission_week, y = n, fill = month)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_viridis_d(option = "viridis", direction = 1, labels = c("01" = "Jan", "02" = "Feb", "03" = "Mar", "04" = "Apr", "05" = "May")) +
+  annotate("rect", xmin = 0.5, xmax = bars[1]+.5, ymin = 0, ymax = count[1], fill = "#440154", alpha = 0.2) +
+  annotate("rect", xmin = bars[1] +.5, xmax = bars[2], ymin = 0, ymax = count[2], fill = "#3b528b", alpha = 0.2) +
+  annotate("rect", xmin = bars[2], xmax = bars[3]-1, ymin = 0, ymax = count[3], fill = "#21918c", alpha = 0.2) +
+  annotate("rect", xmin = bars[3]-1, xmax = bars[4]-2, ymin = 0, ymax = count[4], fill = "#5ec962", alpha = 0.2) +
+  annotate("rect", xmin = bars[4]-2, xmax = bars[5]-2.5, ymin = 0, ymax = count[5], fill = "#fde725", alpha = 0.2) +
+  annotate("text", x = bars[1]/2, y = count[1], label = paste("n =", count[1]) , color = "#440154", vjust = -.5) +
+  annotate("text", x = sum(bars[1:2])/2, y = count[2], label = paste("n =", count[2]), color = "#3b528b", vjust = -.5) +
+  annotate("text", x = sum(bars[2:3])/2, y = count[3], label = paste("n =", count[3]), color = "#21918c", vjust = -.5, hjust= 1) +
+  annotate("text", x = sum(bars[3:4])/2, y = count[4], label = paste("n =", count[4]), color = "#5ec962", vjust = -.5, hjust = 1.5) +
+  annotate("text", x = sum(bars[4:5])/2, y = count[5], label = paste("n =", count[5]), color = "#fde725", vjust = -.5, hjust = 2) +
+  theme_pubclean() + 
+  scale_x_continuous(breaks = data_count %>% pull(icu_admission_week)) +
+  ylab("Number of SARI cases") +
+  xlab("Calendar week of ICU admission") +
+  theme(legend.position = "right", legend.title = element_blank()) + 
+  ggtitle("Figure 1. Weekly SARI admissions")
+```
+
+\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(gtsummary)
+library(gt)
+
+reset_gtsummary_theme()
+theme_gtsummary_journal(journal = 'nejm')
+theme_gtsummary_compact()
+
+data_baseline_year %>%
+  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(chronic_liv_mhyn = case_when(mildliv_mhyn == 1 | modliver_mhyn == 1 ~ 1,
+                                      is.na(mildliv_mhyn) & is.na(modliver_mhyn) ~ NA,
+                                      .default = 0)) %>% 
+  mutate(adult = ifelse(age_estimateyears >= 18, "Adult", "Pediatric")) %>%
+  select(age_estimateyears, 
+         adult,
+         sex, 
+         bmi_calc, 
+         obesity_mhyn,
+         pregyn_rptestcd,
+         chroniccard_mhyn,
+         obesity_mhyn,
+         chronicpul_mhyn,
+         diabetes_mhyn,
+         diabetiscomp_mhyn,
+         asthma_mhyn,
+         renal_mhyn,
+         rheumatology_mhyr,
+         chronic_liv_mhyn,
+         dementia_mhyn,
+         malnutrition_mhyn,
+         chronicneu_mhyn,
+         malignantneo_mhyn,
+         chronhaemo_mhyn,
+         aidshiv_mhyn,
+         chrimm_mhyn,
+         imv_1,
+         dura_vm1_reportonly,
+         ecmo1,
+         prone_pos,
+         dialysis,
+         period
+  ) %>% 
+  tbl_summary(by = period, 
+              missing = "no",
+              statistic = list(all_categorical() ~ "{n}/{N} ({p})"),
+              label = list(age_estimateyears ~ "Age, years", 
+                           adult ~ "Age group",
+                           sex ~ "Sex female", 
+                           bmi_calc ~ "Body mass index, kg/m2",
+                           obesity_mhyn ~ "Obesity",
+                           pregyn_rptestcd ~ "Pregnancy",
+                           chroniccard_mhyn ~ "Chronic cardiac disease",
+                           chronicpul_mhyn ~ "Chronic pulmonary disease",
+                           diabetiscomp_mhyn ~ "Diabetes with complications",
+                           diabetes_mhyn ~ "Diabetes",
+                           asthma_mhyn ~ "Asthma",
+                           renal_mhyn ~ "End stage kidney disease",
+                           rheumatology_mhyr ~ "Rheumatological disease",
+                           chronic_liv_mhyn ~ "Mild/Moderate liver disease",
+                           dementia_mhyn ~ "Dementia",
+                           malnutrition_mhyn ~ "Malnutrition",
+                           chronicneu_mhyn ~ "Chronic neurological disease",
+                           malignantneo_mhyn ~ "Malignant neoplasm",
+                           chronhaemo_mhyn ~ "Chronic haematological disease",
+                           aidshiv_mhyn ~ "HIV/AIDS",
+                           chrimm_mhyn ~ "Chronic immunosuppression",
+                           imv_1 ~ "Invasive mechanical ventilation",
+                           ecmo1 ~ "ECMO",
+                           prone_pos ~ "Prone positioning",
+                           dialysis ~ "Renal replacement therapy", 
+                           dura_vm1_reportonly ~ "Duration of invasive mechanical ventilation, days"),
+              value = list(sex ~ 2)
+  ) %>% 
+  add_overall() %>%
+  add_n() %>%
+  modify_header(all_stat_cols() ~ md("**{level}**
+    
+                                       (N = {n})"),
+                label = "**Variables**") %>% 
+  modify_footnote(list(label ~ "Abbreviations: AIDS, Acquired Immunodeficiency Syndrome; ECMO, Extra-Corporeal Membrane Oxygenation; HIV, Human Immunodeficiency Virus."), 
+                  all_stat_cols() ~ "Continous variables are presented as median (IQR). Categorical variables are presented as n/N (%).") %>%   
+as_gt() %>% 
+  tab_row_group(group = "Treatement in ICU", rows = 24:28) %>%
+  tab_row_group(group = "Comborbidities", rows = 7:23) %>%
+  tab_row_group(group = "Demographic", rows = 1:6) %>%
+  tab_style(style = list(cell_text(weight = "bold")),
+            locations = cells_group()) %>%
+  opt_stylize(style = 6, color = "blue", add_row_striping = TRUE) %>% 
+  tab_header(title = md("**Table 1.** Baseline characteristics and treatement of SARI patients admitted to ICU in 2024")) %>%
+  opt_align_table_header(align = "left") %>%
+  opt_footnote_marks(marks = "extended") %>%
+  gtsave("tables/table_1.png")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="100%"}
+knitr::include_graphics("tables/table_1.png")
+```
+
+
+\
+\
+
+During the current study period 15/215 (7%) patients died in hospital, 101/215 (47%) were discharged home and 91/215 were still in hospital. The leading cause of death was treatment withdrawal (n = 6, 40%) followed by hypoxic respiratory failure (n = 3, 20%). The median length of stay in ICU and in hospital was 3 (2-5) and 6 (4-10) days, respectively. The outcomes of these patients are summarised in the **Table 2**.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+data_baseline_year %>%
+  mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
+  mutate(corona_ieorres = ifelse(corona_ieorres == 1, "COVID-19", "Non-COVID-19")) %>%
+  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(dsterm = ifelse(dsterm == "Unknown", NA, dsterm)) %>%
+  mutate(dsterm = ifelse(is.na(dsterm), "Ongoing care", dsterm)) %>%
+  mutate(dsterm_2 = ifelse(is.na(dsterm_2), "Ongoing care", dsterm_2)) %>%
+  select(
+    icu_los,
+    hosp_los,
+    dsterm_2,
+    dsterm,
+    outcm_cod,
+    period
+  ) %>% 
+  tbl_summary(by = period, 
+              missing = "no",
+              statistic = list(all_categorical() ~ "{n}/{N} ({p})"),
+              label = list(icu_los ~ "ICU length of stay, days", 
+                           hosp_los ~ "Hospital length of stay, days",
+                           dsterm_2 ~ "ICU outcome",
+                           dsterm ~ "Hospital outcome",
+                           outcm_cod ~ "Cause of death")) %>% 
+  add_overall() %>%
+  add_n() %>%
+  modify_header(all_stat_cols() ~ md("**{level}**
+    
+                                       (N = {n})"),
+                label = "**Variables**") %>%
+  modify_footnote(list(all_stat_cols() ~ "Continous variables are presented as median (IQR). Categorical variables are presented as n/N (%).")) %>%   
+  as_gt() %>% 
+  opt_stylize(style = 6, color = "blue", add_row_striping = TRUE) %>% 
+  opt_footnote_marks(marks = "extended") %>%
+  tab_header(title = md("**Table 2.** Outcomes of SARI patients admitted to ICU in 2024")) %>%
+  opt_align_table_header(align = "left") %>%
+  gtsave("tables/table_2.png")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="100%"}
+knitr::include_graphics("tables/table_2.png")
+```
+
+
+\
+
+# **Stratified by pathogen type**
+
+\
+```{r echo=FALSE, fig.height=14, fig.width=10, message=FALSE, warning=FALSE}
+library(survminer)
+
+pathogen_data <- data_baseline_year %>%
+  mutate(if_other_please_specify = tolower(if_other_please_specify)) %>%
+  mutate(corona_ieorres = ifelse(grepl("covid", if_other_please_specify) | grepl("coronavirus", if_other_please_specify), 1, corona_ieorres),
+         haemophilus = ifelse(grepl("haemophilus", if_other_please_specify), 1, 0),
+         noncovid___1 = ifelse(grepl("influenza", if_other_please_specify), 1, noncovid___1),
+         noncovid___2 = ifelse(grepl("flu", if_other_please_specify), 1, noncovid___2),
+         noncovid___3 = ifelse(grepl("rsv", if_other_please_specify), 1, noncovid___3),
+         noncovid___4 = ifelse(grepl("parainfluenza", if_other_please_specify), 1, noncovid___4),
+         adenovirus = ifelse(grepl("adeno", if_other_please_specify), 1, 0),
+         metapneumovirus = ifelse(grepl("metapneumovirus", if_other_please_specify) | 
+                                    grepl("hmpv", if_other_please_specify)
+                                  , 1, 0),
+         entero_rhinovirus = ifelse(grepl("rhino", if_other_please_specify) | grepl("entero", if_other_please_specify), 1, 0),
+         mycoplasma = ifelse(grepl("mycoplasma", if_other_please_specify), 1, 0),
+  ) %>%
+  mutate(pathogen = case_when(haemophilus == 1 ~ "Other",
+                              corona_ieorres == 1 ~ "COVID-19",
+                              noncovid___1 == 1 ~ "Influenza", 
+                              noncovid___2 == 1 ~ "Influenza",
+                              noncovid___3 == 1 ~ "Respiratory syncytial virus",
+                              noncovid___4 == 1 ~ "Parainfluenza",
+                              adenovirus == 1 ~ "Adenovirus",
+                              metapneumovirus == 1 ~ "Metapneumovirus",
+                              entero_rhinovirus == 1 ~ "Entero/Rhinovirus",
+                              mycoplasma == 1 ~ "Other",
+                              .default = "Other")) %>%
+  mutate(pathogen_short = case_when(pathogen == "COVID-19" ~ "COVID-19",
+                                   pathogen == "Influenza" ~ "Influenza",
+                                   pathogen == "Respiratory syncytial virus" ~ "RSV",
+                                   .default = "Other")) %>%
+  mutate(pathogen_short = factor(pathogen_short, levels = c("COVID-19", "Influenza", "RSV", "Other")))
+
+data_count <- pathogen_data %>%
+  mutate(icu_admission_week = as.numeric(round(difftime(hostdat_icu, "2024-01-01 00:00:00", units = "weeks"))) + 1) %>% 
+  group_by(icu_admission_week, pathogen_short) %>%
+  summarise(n = n(), 
+            month = format(hostdat_icu, "%m")) %>%
+  distinct() %>% 
+  group_by(month, pathogen_short) %>%
+  mutate(n_month = sum(n))
+  
+image <- data_count %>%
+  ggplot(aes(x = icu_admission_week, y = n, fill = month)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_viridis_d(option = "viridis", direction = 1, labels = c("01" = "Jan", "02" = "Feb", "03" = "Mar", "04" = "Apr", "05" = "May")) +
+  facet_wrap(~pathogen_short, ncol = 1) +
+  theme_pubclean() + 
+  scale_x_continuous(breaks = data_count %>% pull(icu_admission_week)) +
+  ylab("Number of SARI cases") +
+  xlab("Calendar week of ICU admission") +
+  theme(legend.position = "right", legend.title = element_blank()) + 
+  ggtitle("Figure 2. Weekly SARI admissions according to the pathogen type") + 
+  theme(strip.background = element_rect(fill = "#1A5276"), strip.text = element_text(color = "white"))
+
+table <- ggsummarytable(data_count %>% mutate("Monthly number" = n_month), x = "month", y = "Monthly number", color = "month", facet.by = "pathogen_short", ncol = 1) + 
+  theme_cleantable() +
+  ylab("") + 
+  xlab("Month") +
+  scale_color_viridis_d(option = "viridis", direction = 1, labels = c("COVID-19" = "COVID-19", "Influenza" = "Influenza", "RSV" = "RSV", "Other" = "Other")) + 
+  theme(strip.background = element_rect(fill = "#1A5276"), strip.text = element_text(color = "white"))
+
+ggarrange(image, table, ncol = 1, common.legend = TRUE, align = "hv", heights = c(9, 3), legend = "right")
+```
+
+\
+\
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+pathogen_data %>%
+  mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
+  mutate(corona_ieorres = ifelse(corona_ieorres == 1, "COVID-19", "Non-COVID-19")) %>%
+  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(chronic_liv_mhyn = case_when(mildliv_mhyn == 1 | modliver_mhyn == 1 ~ 1,
+                                      is.na(mildliv_mhyn) & is.na(modliver_mhyn) ~ NA,
+                                      .default = 0)) %>% 
+  mutate(adult = ifelse(age_estimateyears >= 18, "Adult", "Pediatric")) %>%
+  select(age_estimateyears, 
+         adult,
+         sex, 
+         bmi_calc, 
+         obesity_mhyn,
+         pregyn_rptestcd,
+         chroniccard_mhyn,
+         obesity_mhyn,
+         chronicpul_mhyn,
+         diabetes_mhyn,
+         diabetiscomp_mhyn,
+         asthma_mhyn,
+         renal_mhyn,
+         rheumatology_mhyr,
+         chronic_liv_mhyn,
+         dementia_mhyn,
+         malnutrition_mhyn,
+         chronicneu_mhyn,
+         malignantneo_mhyn,
+         chronhaemo_mhyn,
+         aidshiv_mhyn,
+         chrimm_mhyn,
+         imv_1,
+         dura_vm1_reportonly,
+         ecmo1,
+         prone_pos,
+         dialysis,
+         period,
+         pathogen_short
+  ) %>% 
+  tbl_strata(strata = pathogen_short, 
+             .tbl_fun = ~.x %>% tbl_summary(by = period, 
+                                            missing = "no",
+                                            statistic = list(all_categorical() ~ "{n}/{N} ({p})"),
+                                            label = list(age_estimateyears ~ "Age, years", 
+                                                         adult ~ "Age group",
+                                                         sex ~ "Sex female", 
+                                                         bmi_calc ~ "Body mass index, kg/m2",
+                                                         obesity_mhyn ~ "Obesity",
+                                                         pregyn_rptestcd ~ "Pregnancy",
+                                                         chroniccard_mhyn ~ "Chronic cardiac disease",
+                                                         chronicpul_mhyn ~ "Chronic pulmonary disease",
+                                                         diabetiscomp_mhyn ~ "Diabetes with complications",
+                                                         diabetes_mhyn ~ "Diabetes",
+                                                         asthma_mhyn ~ "Asthma",
+                                                         renal_mhyn ~ "End stage kidney disease",
+                                                         rheumatology_mhyr ~ "Rheumatological disease",
+                                                         chronic_liv_mhyn ~ "Mild/Moderate liver disease",
+                                                         dementia_mhyn ~ "Dementia",
+                                                         malnutrition_mhyn ~ "Malnutrition",
+                                                         chronicneu_mhyn ~ "Chronic neurological disease",
+                                                         malignantneo_mhyn ~ "Malignant neoplasm",
+                                                         chronhaemo_mhyn ~ "Chronic haematological disease",
+                                                         aidshiv_mhyn ~ "HIV/AIDS",
+                                                         chrimm_mhyn ~ "Chronic immunosuppression",
+                                                         imv_1 ~ "Invasive mechanical ventilation",
+                                                         ecmo1 ~ "ECMO",
+                                                         prone_pos ~ "Prone positioning",
+                                                         dialysis ~ "Renal replacement therapy", 
+                                                         dura_vm1_reportonly ~ "Duration of invasive mechanical ventilation, days"),
+                                            value = list(sex ~ 2)
+                                ) %>% 
+                                modify_header(all_stat_cols() ~ md("**{level}**
+                                  
+                                                                     (N = {n})"),
+                                              label = "**Variables**") %>% 
+                                modify_footnote(list(label ~ "Abbreviations: AIDS, Acquired Immunodeficiency Syndrome; ECMO, Extra-Corporeal Membrane Oxygenation; HIV, Human Immunodeficiency Virus."), 
+                                                all_stat_cols() ~ "Continous variables are presented as median (IQR). Categorical variables are presented as n/N (%).")) %>%   
+                                as_gt() %>% 
+                                tab_row_group(group = "Treatement in ICU", rows = 24:28) %>%
+                                tab_row_group(group = "Comborbidities", rows = 7:23) %>%
+                                tab_row_group(group = "Demographic", rows = 1:6) %>%
+                                tab_style(style = list(cell_text(weight = "bold")),
+                                          locations = cells_group()) %>%
+                                opt_stylize(style = 6, color = "blue", add_row_striping = TRUE) %>% 
+                                tab_header(title = md("**Table 3.** Baseline characteristics and treatement of SARI patients admitted to ICU in 2024")) %>%
+                                opt_align_table_header(align = "left") %>%
+                                opt_footnote_marks(marks = "extended") %>%
+                                tab_options(table.font.size = 12) %>%
+  gtsave("tables/table_3.png")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="100%"}
+knitr::include_graphics("tables/table_3.png")
+```
+
+
+\
+\
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+pathogen_data %>%
+  mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
+  mutate(corona_ieorres = ifelse(corona_ieorres == 1, "COVID-19", "Non-COVID-19")) %>%
+  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(dsterm = ifelse(dsterm == "Unknown", NA, dsterm)) %>%
+  mutate(dsterm = ifelse(is.na(dsterm), "Ongoing care", dsterm)) %>%
+  mutate(dsterm_2 = ifelse(is.na(dsterm_2), "Ongoing care", dsterm_2)) %>%
+  select(
+    icu_los,
+    hosp_los,
+    dsterm_2,
+    dsterm,
+    outcm_cod,
+    period,
+    pathogen_short
+  ) %>% 
+  tbl_strata(strata = pathogen_short, 
+             .tbl_fun = ~.x %>% tbl_summary(by = period, 
+                                            missing = "no",
+                                            statistic = list(all_categorical() ~ "{n}/{N} ({p})"),
+                                            label = list(icu_los ~ "ICU length of stay, days", 
+                                                         hosp_los ~ "Hospital length of stay, days",
+                                                         dsterm_2 ~ "ICU outcome",
+                                                         dsterm ~ "Hospital outcome",
+                                                         outcm_cod ~ "Cause of death")) %>% 
+                                modify_header(all_stat_cols() ~ md("**{level}**
+                                  
+                                                                     (N = {n})"),
+                                              label = "**Variables**") %>%
+                                modify_footnote(list(all_stat_cols() ~ "Continous variables are presented as median (IQR). Categorical variables are presented as n/N (%)."))) %>%   
+                                as_gt() %>% 
+                                opt_stylize(style = 6, color = "blue", add_row_striping = TRUE) %>% 
+                                opt_footnote_marks(marks = "extended") %>%
+                                tab_header(title = md("**Table 4.** Outcomes of SARI patients admitted to ICU in 2024 stratified by pathogen type")) %>%
+                                opt_align_table_header(align = "left") %>%
+                                tab_options(table.font.size = 12) %>%
+  gtsave("tables/table_4.png")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="100%"}
+knitr::include_graphics("tables/table_4.png")
+```
