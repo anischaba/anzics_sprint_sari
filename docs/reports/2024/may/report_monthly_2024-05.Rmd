@@ -1,13 +1,23 @@
 ---
-title: "SPRINT SARI 2024 Monthly report - May"
+title: "SPRINT SARI 2024 - Monthly report - May"
 output:
   word_document:
     toc: true
     reference_docx: "template.docx"
 date: "`r format(Sys.Date())`"
 ---
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.path = paste0("plots/", Sys.Date(), "/"), 
+                      fig.dpi = 900,
+                      fig.width = 12, 
+                      fig.height = 10,
+                      dev = 'jpeg',
+                      echo = FALSE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
 
-This report covers the period from 22^nd^ April 2024 to 31^st^ May 2024.
+This report covers the period from 01^st^ May 2024 to 31^st^ May 2024.
 
 # **Overall cohort**
 
@@ -15,15 +25,17 @@ This report covers the period from 22^nd^ April 2024 to 31^st^ May 2024.
 library(dplyr)
 library(tidyverse)
 
-data_ssari <- readRDS("cleaned_data/sprit_sari_annual_report_2024_dataset.rds")
+data_ssari <- readRDS("cleaned_data/2024-07-01_sprit_sari_annual_report_dataset.rds") %>% 
+  mutate(month = format(hostdat_icu, "%m"), 
+         year = format(hostdat_icu, "%Y"))
 
 data_ssari_year <- data_ssari %>% 
-  filter(hostdat_icu >= "2024-01-02 00:00:00") %>%
-  filter(hostdat_icu <= "2024-05-30 00:00:00")
+  filter(year == "2024") %>%
+  filter(month >= "01" & month <= "05")
 
 data_ssari_month <- data_ssari %>% 
-  filter(hostdat_icu >= "2024-04-21 00:00:00") %>%
-  filter(hostdat_icu <= "2024-05-30 00:00:00") 
+  filter(year == "2024") %>%
+  filter(month == "05")
 
 data_baseline_year <- data_ssari_year %>%
   group_by(subjid) %>%
@@ -31,7 +43,6 @@ data_baseline_year <- data_ssari_year %>%
   ungroup() %>%
   mutate(hosp_los = round(as.numeric(difftime(dsstdtc, hostdat, units = "days"))), 
          icu_los = round(as.numeric(difftime(dsstdtc_icudate, hostdat_icu, units = "days"))))
-
 
 data_baseline_month <- data_ssari_month %>%
   group_by(subjid) %>%
@@ -41,44 +52,53 @@ data_baseline_month <- data_ssari_month %>%
          icu_los = round(as.numeric(difftime(dsstdtc_icudate, hostdat_icu, units = "days"))))
 ```
 
-During the study period (22^nd^ April 2024 to 31^st^ May 2024), there were **`r nrow(data_baseline_month)`** SARI patients admitted to the a participating SPRINT-SARI ICU. The cumulative number of patients in the SPRINT-SARI recorded for the year 2024 (1^st^ January to 19 May) is now **`r nrow(data_baseline_year)`**. The weekly number of SARI admissions aggregated by  calendar month is shown in the **Figure 1**. Baseline characteristics of these patients are summarised in the **Table 1**. 
+During the study period (01^st^ May 2024 to 31^st^ May 2024), there were **`r nrow(data_baseline_month)`** SARI patients admitted to a participating SPRINT-SARI ICU. The cumulative number of patients in the SPRINT-SARI recorded for the year 2024 (1^st^ January to 31^st^ May) is now **`r nrow(data_baseline_year)`**. The weekly number of SARI admissions aggregated by  calendar month is shown in **Figure 1**. Baseline characteristics of these patients are summarised in the **Table 1**. 
 
 \
 
+Figure 1. Weekly SARI admissions
+
+\
 ```{r echo=FALSE, fig.height=8, fig.width=10, message=FALSE, warning=FALSE}
 library(ggpubr)
-data_count <- data_baseline_year %>%
-  mutate(icu_admission_week = as.numeric(round(difftime(hostdat_icu, "2024-01-01 00:00:00", units = "weeks"))) + 1) %>% 
+data_count <- data_baseline_year %>% 
+  mutate(icu_admission_week = as.numeric(round(difftime(hostdat_icu, "2024-01-01 00:00:00", units = "weeks"), 1)) + .5) %>%
+  group_by(month) %>%
+  summarise(n_month = n(), 
+            icu_admission_week = icu_admission_week) %>%
   group_by(icu_admission_week) %>%
   summarise(n = n(), 
-            month = format(hostdat_icu, "%m")) %>%
+            n_month = n_month,
+            month = month) %>%
   distinct() %>% 
   group_by(month) %>%
-  mutate(n_month = sum(n))
-  
-count <- data_count %>% select(month, n_month) %>% unique() %>% pull(n_month)
-bars <- data_count %>% select(month, icu_admission_week) %>% group_by(month) %>% summarise(n_bars = n()) %>% pull(n_bars) %>% cumsum()
+  mutate(icu_admission_week = round(icu_admission_week)) %>% 
+  group_by(icu_admission_week, month) %>%
+  summarise(n_month = n_month,
+            n = sum(n)) %>% 
+  distinct()
+
+count <- data_count %>% select(month, n_month) %>% pull(n_month) %>% unique()
+bars <- data_count %>% select(month, icu_admission_week) %>% group_by(month) %>% summarise(n_bars = max(icu_admission_week)) %>% mutate(position = n_bars / 2) %>% mutate(position = position + lag(position))
 
 data_count %>%
   ggplot(aes(x = icu_admission_week, y = n, fill = month)) +
   geom_bar(stat = "identity", position = position_dodge()) +
   scale_fill_viridis_d(option = "viridis", direction = 1, labels = c("01" = "Jan", "02" = "Feb", "03" = "Mar", "04" = "Apr", "05" = "May")) +
-  annotate("rect", xmin = 0.5, xmax = bars[1]+.5, ymin = 0, ymax = count[1], fill = "#440154", alpha = 0.2) +
-  annotate("rect", xmin = bars[1] +.5, xmax = bars[2], ymin = 0, ymax = count[2], fill = "#3b528b", alpha = 0.2) +
-  annotate("rect", xmin = bars[2], xmax = bars[3]-1, ymin = 0, ymax = count[3], fill = "#21918c", alpha = 0.2) +
-  annotate("rect", xmin = bars[3]-1, xmax = bars[4]-2, ymin = 0, ymax = count[4], fill = "#5ec962", alpha = 0.2) +
-  annotate("rect", xmin = bars[4]-2, xmax = bars[5]-2.5, ymin = 0, ymax = count[5], fill = "#fde725", alpha = 0.2) +
-  annotate("text", x = bars[1]/2, y = count[1], label = paste("n =", count[1]) , color = "#440154", vjust = -.5) +
-  annotate("text", x = sum(bars[1:2])/2, y = count[2], label = paste("n =", count[2]), color = "#3b528b", vjust = -.5) +
-  annotate("text", x = sum(bars[2:3])/2, y = count[3], label = paste("n =", count[3]), color = "#21918c", vjust = -.5, hjust= 1) +
-  annotate("text", x = sum(bars[3:4])/2, y = count[4], label = paste("n =", count[4]), color = "#5ec962", vjust = -.5, hjust = 1.5) +
-  annotate("text", x = sum(bars[4:5])/2, y = count[5], label = paste("n =", count[5]), color = "#fde725", vjust = -.5, hjust = 2) +
+  annotate("rect", xmin = 0.5, xmax = bars$n_bars[1], ymin = 0, ymax = count[1], fill = "#440154", alpha = 0.2) +
+  annotate("rect", xmin = bars$n_bars[1], xmax = bars$n_bars[2], ymin = 0, ymax = count[2], fill = "#3b528b", alpha = 0.2) +
+  annotate("rect", xmin = bars$n_bars[2], xmax = bars$n_bars[3], ymin = 0, ymax = count[3], fill = "#21918c", alpha = 0.2) +
+  annotate("rect", xmin = bars$n_bars[3], xmax = bars$n_bars[4], ymin = 0, ymax = count[4], fill = "#5ec962", alpha = 0.2) +
+  annotate("rect", xmin = bars$n_bars[4], xmax = bars$n_bars[5], ymin = 0, ymax = count[5], fill = "#fde725", alpha = 0.2) +
+  annotate("text", x = 2.5, y = count[1], label = paste("n =", count[1]) , color = "#440154", vjust = -.5) +
+  annotate("text", x = bars$position[2], y = count[2], label = paste("n =", count[2]), color = "#3b528b", vjust = -.5) +
+  annotate("text", x = bars$position[3], y = count[3], label = paste("n =", count[3]), color = "#21918c", vjust = -.5) +
+  annotate("text", x = bars$position[4], y = count[4], label = paste("n =", count[4]), color = "#5ec962", vjust = -.5) +
+  annotate("text", x = bars$position[5], y = count[5], label = paste("n =", count[5]), color = "#fde725", vjust = -.5) +
   theme_pubclean() + 
   scale_x_continuous(breaks = data_count %>% pull(icu_admission_week)) +
-  ylab("Number of SARI cases") +
   xlab("Calendar week of ICU admission") +
-  theme(legend.position = "right", legend.title = element_blank()) + 
-  ggtitle("Figure 1. Weekly SARI admissions")
+  theme(legend.position = "right", legend.title = element_blank()) 
 ```
 
 \
@@ -93,7 +113,7 @@ theme_gtsummary_journal(journal = 'nejm')
 theme_gtsummary_compact()
 
 data_baseline_year %>%
-  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(period = ifelse(month == "05", "01-May to 31-May", "01-Jan to 30-Apr")) %>%
   mutate(chronic_liv_mhyn = case_when(mildliv_mhyn == 1 | modliver_mhyn == 1 ~ 1,
                                       is.na(mildliv_mhyn) & is.na(modliver_mhyn) ~ NA,
                                       .default = 0)) %>% 
@@ -187,13 +207,13 @@ knitr::include_graphics("tables/table_1.png")
 \
 \
 
-During the current study period 15/215 (7%) patients died in hospital, 101/215 (47%) were discharged home and 91/215 were still in hospital. The leading cause of death was treatment withdrawal (n = 6, 40%) followed by hypoxic respiratory failure (n = 3, 20%). The median length of stay in ICU and in hospital was 3 (2-5) and 6 (4-10) days, respectively. The outcomes of these patients are summarised in the **Table 2**.
+During the current study period 16/229 (7%) patients died in hospital, 169/229 (74%) were discharged to wards and 26/229 (11%) were still in hospital. The leading cause of death was treatment withdrawal 13/25 (52%) followed by hypoxic respiratory failure 5/25 (20%). The median length of stay in ICU and in hospital was 3 (2-5) and 8 (5-14) days, respectively. The outcomes of these patients are summarised in the **Table 2**.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 data_baseline_year %>%
   mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
   mutate(corona_ieorres = ifelse(corona_ieorres == 1, "COVID-19", "Non-COVID-19")) %>%
-  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(period = ifelse(month == "05", "01-May to 31-May", "01-Jan to 30-Apr")) %>%
   mutate(dsterm = ifelse(dsterm == "Unknown", NA, dsterm)) %>%
   mutate(dsterm = ifelse(is.na(dsterm), "Ongoing care", dsterm)) %>%
   mutate(dsterm_2 = ifelse(is.na(dsterm_2), "Ongoing care", dsterm_2)) %>%
@@ -219,7 +239,7 @@ data_baseline_year %>%
     
                                        (N = {n})"),
                 label = "**Variables**") %>%
-  modify_footnote(list(all_stat_cols() ~ "Continous variables are presented as median (IQR). Categorical variables are presented as n/N (%).")) %>%   
+  modify_footnote(list(all_stat_cols() ~ "Continous variables are presented as median (IQR). Categorical variables are presented as n/N (%).")) %>%
   as_gt() %>% 
   opt_stylize(style = 6, color = "blue", add_row_striping = TRUE) %>% 
   opt_footnote_marks(marks = "extended") %>%
@@ -236,6 +256,13 @@ knitr::include_graphics("tables/table_2.png")
 \
 
 # **Stratified by pathogen type**
+
+\
+Overall 28 patients presented a viral co-infection. Categorization was performed as follows : COVID-19 > Influenza > RSV > Other. Baseline characteristics, intervention, and outcomes according to the pathogen type are presented in **Table 3** and **Table 4**. Weekly SARI admissions according to the pathogen type are displayed in **Figure 2**. A heatmap summarising all co-infection is displayed in **Figure 3**.
+
+\
+
+Figure 2. Weekly SARI admissions according to the pathogen type
 
 \
 ```{r echo=FALSE, fig.height=14, fig.width=10, message=FALSE, warning=FALSE}
@@ -255,9 +282,14 @@ pathogen_data <- data_baseline_year %>%
                                   , 1, 0),
          entero_rhinovirus = ifelse(grepl("rhino", if_other_please_specify) | grepl("entero", if_other_please_specify), 1, 0),
          mycoplasma = ifelse(grepl("mycoplasma", if_other_please_specify), 1, 0),
-  ) %>%
-  mutate(pathogen = case_when(haemophilus == 1 ~ "Other",
-                              corona_ieorres == 1 ~ "COVID-19",
+  ) %>% 
+  group_by(subjid) %>%
+  mutate(noncovid___1 = ifelse(noncovid___1 == 1, 1, noncovid___2)) %>%
+  mutate(inf_sum = sum(corona_ieorres, noncovid___1, noncovid___3, noncovid___4, adenovirus, metapneumovirus, entero_rhinovirus, mycoplasma, na.rm = TRUE)) %>% 
+  ungroup()
+
+pathogen_data <- pathogen_data %>% 
+  mutate(pathogen = case_when(corona_ieorres == 1 ~ "COVID-19",
                               noncovid___1 == 1 ~ "Influenza", 
                               noncovid___2 == 1 ~ "Influenza",
                               noncovid___3 == 1 ~ "Respiratory syncytial virus",
@@ -265,22 +297,28 @@ pathogen_data <- data_baseline_year %>%
                               adenovirus == 1 ~ "Adenovirus",
                               metapneumovirus == 1 ~ "Metapneumovirus",
                               entero_rhinovirus == 1 ~ "Entero/Rhinovirus",
+                              haemophilus == 1 ~ "Other",
                               mycoplasma == 1 ~ "Other",
-                              .default = "Other")) %>%
+                              .default = "Other")) %>% 
   mutate(pathogen_short = case_when(pathogen == "COVID-19" ~ "COVID-19",
-                                   pathogen == "Influenza" ~ "Influenza",
-                                   pathogen == "Respiratory syncytial virus" ~ "RSV",
-                                   .default = "Other")) %>%
+                                    pathogen == "Influenza" ~ "Influenza",
+                                    pathogen == "Respiratory syncytial virus" ~ "RSV",
+                                    .default = "Other")) %>%  
   mutate(pathogen_short = factor(pathogen_short, levels = c("COVID-19", "Influenza", "RSV", "Other")))
 
 data_count <- pathogen_data %>%
-  mutate(icu_admission_week = as.numeric(round(difftime(hostdat_icu, "2024-01-01 00:00:00", units = "weeks"))) + 1) %>% 
+  mutate(icu_admission_week = as.numeric(round(difftime(hostdat_icu, "2024-01-01 00:00:00", units = "weeks"), 1)) + .5) %>%  
   group_by(icu_admission_week, pathogen_short) %>%
   summarise(n = n(), 
             month = format(hostdat_icu, "%m")) %>%
   distinct() %>% 
   group_by(month, pathogen_short) %>%
-  mutate(n_month = sum(n))
+  mutate(n_month = sum(n), 
+         icu_admission_week = round(icu_admission_week)) %>% 
+  group_by(icu_admission_week, month, pathogen_short) %>%
+  summarise(n_month = n_month,
+            n = sum(n)) %>% 
+  distinct()
   
 image <- data_count %>%
   ggplot(aes(x = icu_admission_week, y = n, fill = month)) +
@@ -292,7 +330,6 @@ image <- data_count %>%
   ylab("Number of SARI cases") +
   xlab("Calendar week of ICU admission") +
   theme(legend.position = "right", legend.title = element_blank()) + 
-  ggtitle("Figure 2. Weekly SARI admissions according to the pathogen type") + 
   theme(strip.background = element_rect(fill = "#1A5276"), strip.text = element_text(color = "white"))
 
 table <- ggsummarytable(data_count %>% mutate("Monthly number" = n_month), x = "month", y = "Monthly number", color = "month", facet.by = "pathogen_short", ncol = 1) + 
@@ -306,13 +343,45 @@ ggarrange(image, table, ncol = 1, common.legend = TRUE, align = "hv", heights = 
 ```
 
 \
+Figure 3. Heatmap of patients with viral co-infections
+
+\
+```{r}
+# library(d3heatmap)
+# library(RColorBrewer)
+# 
+# pathogen_data %>% 
+#   filter(inf_sum > 1) %>% select(corona_ieorres, noncovid___1, noncovid___3, noncovid___4, adenovirus, metapneumovirus, entero_rhinovirus, mycoplasma) %>% mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
+#   as.matrix() %>%
+#   d3heatmap(col = c("#D4E6F1", "#5499C7"), dendrogram = "none", key = TRUE, scale = 'none')
+
+library(pheatmap)
+pathogen_data %>%
+  filter(inf_sum > 1) %>% 
+  select(corona_ieorres, noncovid___1, noncovid___3, noncovid___4, adenovirus, metapneumovirus, entero_rhinovirus, mycoplasma, haemophilus) %>% 
+  mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>%
+  rename("COVID-19" = corona_ieorres, 
+         "Influenza" = noncovid___1, 
+         "Respiratory syncytial virus" = noncovid___3, 
+         "Parainfluenza" = noncovid___4,
+         "Adenovirus" = adenovirus,
+         "Metapneumovirus" = metapneumovirus,
+         "Entero/Rhinovirus" = entero_rhinovirus,
+         "Haemophilus" = haemophilus,
+         "Mycoplasma" = mycoplasma) %>%
+  as.matrix() %>%
+  pheatmap(treeheight_row = 0, treeheight_col = 0, color = c("#D4E6F1", "#5499C7"), legend = FALSE, labels_row = c(1:32)) 
+
+```
+Each row represents a patient. Dark blue cells indicate a positive infection
+
 \
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
 pathogen_data %>%
   mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
   mutate(corona_ieorres = ifelse(corona_ieorres == 1, "COVID-19", "Non-COVID-19")) %>%
-  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(period = ifelse(month == "05", "01-May to 31-May", "01-Jan to 30-Apr")) %>%
   mutate(chronic_liv_mhyn = case_when(mildliv_mhyn == 1 | modliver_mhyn == 1 ~ 1,
                                       is.na(mildliv_mhyn) & is.na(modliver_mhyn) ~ NA,
                                       .default = 0)) %>% 
@@ -411,7 +480,7 @@ knitr::include_graphics("tables/table_3.png")
 pathogen_data %>%
   mutate(corona_ieorres = ifelse(is.na(corona_ieorres), 0, corona_ieorres)) %>% 
   mutate(corona_ieorres = ifelse(corona_ieorres == 1, "COVID-19", "Non-COVID-19")) %>%
-  mutate(period = ifelse(hostdat_icu <= "2024-04-21", "01-Jan to 21-Apr", "22 Apr to 31 May")) %>%
+  mutate(period = ifelse(month == "05", "01-May to 31-May", "01-Jan to 30-Apr")) %>%
   mutate(dsterm = ifelse(dsterm == "Unknown", NA, dsterm)) %>%
   mutate(dsterm = ifelse(is.na(dsterm), "Ongoing care", dsterm)) %>%
   mutate(dsterm_2 = ifelse(is.na(dsterm_2), "Ongoing care", dsterm_2)) %>%

@@ -9,7 +9,7 @@ library(Hmisc) # for the label function
 # Data Import
 
 ```{r}
-data_ssari <- read_csv("raw_data/NovelCoronavirusCOVI_DATA_2024-06-01_1614.csv")
+data_ssari <- read_csv("raw_data/NovelCoronavirusCOVI_DATA_2024-07-01_1058.csv")
 data_duplicate <- readxl::read_excel("raw_data/log_duplicate_19DEC22.xlsx")
 date_report <- Sys.Date()
 ```
@@ -265,5 +265,5 @@ data_ssari <- data_ssari %>%
 ```
 
 ```{r}
-saveRDS(data_ssari, "cleaned_data/sprit_sari_annual_report_2024_dataset.rds")
+saveRDS(data_ssari, paste0("cleaned_data/", Sys.Date(), "_sprit_sari_annual_report_dataset.rds"))
 ```

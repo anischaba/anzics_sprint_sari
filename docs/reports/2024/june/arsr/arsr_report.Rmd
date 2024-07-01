@@ -1,0 +1,322 @@
+---
+output:
+  word_document:
+    toc: no
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r, include=FALSE}
+source("code/Ary_functions.R")
+library(tableone)
+library(tidyverse)
+library(officer)
+library(flextable)
+library(tidyr)
+library(lubridate)
+library(UpSetR)
+library(survminer)
+library(survival)
+library(grid)
+library(RColorBrewer)
+library(gplots)
+library(pheatmap)
+library(Hmisc)
+library(boot)
+library(table1)
+library(rstatix)
+library(gridExtra)
+```
+
+```{r, include=FALSE}
+Sys.setlocale("LC_TIME", "C")
+
+# date of extraction and report
+date_extract <- as.Date("2024-06-28") #Include the date of extraction
+date_report <- as.Date("2024-06-28") #Include the date of extraction
+
+# date of reporting period
+date_year_start <- as.Date("2024-01-01")
+date_period_start <- as.Date("2024-05-20")
+date_period_end <- as.Date("2024-06-16")
+
+date_year_start_format <- format(date_year_start, "%d-%m-%Y")
+date_period_start_format <- format(date_period_start, "%d-%m-%Y")
+date_period_end_format <- format(date_period_end, "%d-%m-%Y")
+
+data_ssari.all <- readRDS("cleaned_data/2024-06-28_arsr_june.rds") 
+```
+
+```{r precess, include=FALSE}
+data_ssari.year <- data_ssari.all %>%
+	mutate(state = ifelse(grepl("001|003", redcap_data_access_group), "NT", 
+				   ifelse(grepl("011|057|128|136|169|235|249|279|345", redcap_data_access_group), "WA", 
+				   ifelse(grepl("006|007|034|045|101|116|216|284", redcap_data_access_group), "SA", 
+				   ifelse(grepl("004", redcap_data_access_group), "ACT",
+				   ifelse(grepl("113|138", redcap_data_access_group), "TAS",
+				   ifelse(grepl("019|020|026|040|042|051|117|123|149|168|186|205|223|224|286", redcap_data_access_group), "QLD",
+				   ifelse(grepl("008|012|014|033|046|079|080|111|115|127|131|142|163|210|277|283", redcap_data_access_group), "NSW", "VIC"))))))),
+			hostdat_icu = as.POSIXct(hostdat_icu, format = "%Y-%m-%d %H:%M"),
+			hostdat = as.POSIXct(hostdat, format = "%Y-%m-%d %H:%M")) %>%
+  mutate(corona_ieorres_2 = ifelse(is.na(corona_ieorres_2) & corona_ieorres==1, 3, corona_ieorres_2)) %>%
+  select(subjid, redcap_data_access_group, redcap_event_name, corona_ieorres_2, age_estimateyears, sex, ethnic___8, noncovid___1, noncovid___2, noncovid___3, noncovid___4, noncovid___9, if_other_please_specify, hostdat, hostdat_icu, dsstdtc_icudate, dsstdtc, imv_1, imv1_start, imv1_stop, imv2_start, imv2_stop, imv3_start, imv3_stop, duration_ventilation, proven_incidental, incidental_diagnosis, dsterm, dsterm_2, icu_los, hosp_los,hooccur) %>% 
+	group_by(subjid) %>%
+	fill(redcap_data_access_group, corona_ieorres_2, age_estimateyears, sex, ethnic___8, noncovid___1, noncovid___2, noncovid___3, noncovid___4, noncovid___9, if_other_please_specify, hostdat, hostdat_icu, dsstdtc_icudate, dsstdtc, imv_1, imv1_start, imv1_stop, imv2_start, imv2_stop, imv3_start, imv3_stop, duration_ventilation, proven_incidental, incidental_diagnosis, dsterm, dsterm_2, icu_los, hosp_los,hooccur, .direction = "updown") %>%
+	ungroup() %>%
+  rename(abriginal = ethnic___8, influenza_A = noncovid___1, influenza_B = noncovid___2, RSV = noncovid___3, parainfluenza = noncovid___4, other_pathogene = noncovid___9) %>%
+  filter(!is.na(subjid) & hostdat_icu <= date_period_end & hostdat_icu >= date_year_start & redcap_event_name == "day_1_arm_1") %>%
+  mutate(dsterm = ifelse(dsterm_2==1, 7, dsterm), # Death in ICU
+         dsterm = ifelse(dsterm_2!=1 & dsterm==6, 8, dsterm), # Death in hospital ward 
+         dsterm = ifelse(is.na(dsterm_2) & is.na(dsterm), 9, dsterm), # Ongoing care in ICU
+         dsterm = ifelse(!is.na(dsterm_2) & is.na(dsterm), 10, dsterm), # Ongoing care in hospital
+         outcome = ifelse(dsterm==1, "Discharged home", 
+		                    ifelse(dsterm==2, "Transfer to other hospital/facility", 
+		                           ifelse(dsterm==3, "Transfer to rehabilitation", 
+		                                  ifelse(dsterm==4, "Palliative care", 
+		                                         ifelse(dsterm==7, "Mortality - ICU", 
+		                                                ifelse(dsterm==8, "Mortality - Hospital Ward", 
+		                                                       ifelse(dsterm==9, "Ongoing care in ICU", 
+		                                                              ifelse(dsterm==10, "Ongoing care in hospital ward", NA)))))))),
+         outcome = factor(outcome, levels = c("Ongoing care in ICU","Ongoing care in hospital ward","Transfer to other hospital/facility","Transfer to rehabilitation","Discharged home","Mortality - ICU", "Mortality - Hospital Ward"))) %>%
+  mutate(period = ifelse(hostdat_icu >= date_period_start, "Severity reporting period", "before"))
+
+# QC check of the data
+error.data <- data_ssari.year %>%
+  filter(icu_los > 90 | hosp_los > 90 | duration_ventilation > 90 | icu_los > hosp_los | duration_ventilation > hosp_los) %>%
+  mutate(error = case_when(icu_los > 90 ~ "long ICU los",
+                           hosp_los > 90 ~ "long hosp los",
+                           duration_ventilation > 90 ~ "long IMV",
+                           icu_los > hosp_los ~ "icu_los > hosp_los",
+                           duration_ventilation > icu_los ~"duration_ventilation > hosp_los"))
+
+write.csv(error.data, file = "2024_SPRINT_SARI_error.csv")
+
+data_ssari.year <- data_ssari.year %>%
+  mutate(icu_los = ifelse(icu_los > 90 | icu_los > hosp_los, NA, icu_los),
+         hosp_los = ifelse(hosp_los > 90, NA, hosp_los),
+         duration_ventilation = ifelse(duration_ventilation>90 | duration_ventilation>hosp_los | duration_ventilation==0, NA, duration_ventilation))
+
+data_ssari.report <- data_ssari.year %>%
+  dplyr::filter(hostdat_icu >= date_period_start)
+```
+
+```{r count, include=FALSE}
+# year
+data_ssari.year <- data_ssari.year %>%
+  mutate(covid = if_else(corona_ieorres_2 >= 3, 1, 0, missing = 0),
+         influenza = ifelse(influenza_A == 1 | influenza_B == 1, 1, 0),
+         other_pathogene1 = ifelse(parainfluenza == 1 | other_pathogene == 1, 1, 0),
+         number_infection = covid + influenza + RSV,
+         number_infection1 = covid + influenza + RSV + other_pathogene1)
+
+patient.n.year = length(data_ssari.year$subjid)
+covid.n.year = sum(data_ssari.year$covid, na.rm = T)
+influenza.n.year = sum(data_ssari.year$influenza, na.rm = T)
+rsv.n.year = sum(data_ssari.year$RSV, na.rm = T)
+other.n.year = sum(data_ssari.year$other_pathogene1)
+coinfection.n.year = sum(data_ssari.year$number_infection1 > 1)
+
+discharged.n.year = sum(data_ssari.year$outcome == "Discharged home", na.rm = T)
+icumort.n.year = sum(data_ssari.year$outcome == "Mortality - ICU", na.rm = T)
+hospmort.n.year = sum(data_ssari.year$outcome == "Mortality - Hospital Ward", na.rm = T)
+
+# reporting period
+data_ssari.report <- data_ssari.year %>%
+  dplyr::filter(hostdat_icu >= date_period_start)
+
+patient.n.report = length(data_ssari.report$subjid)
+covid.n.report = sum(data_ssari.report$covid, na.rm = T)
+influenza.n.report = sum(data_ssari.report$influenza, na.rm = T)
+rsv.n.report = sum(data_ssari.report$RSV, na.rm = T)
+other.n.report = sum(data_ssari.report$other_pathogene1)
+
+discharged.n.report = sum(data_ssari.report$outcome == "Discharged home")
+icumort.n.report = sum(data_ssari.report$outcome == "Mortality - ICU")
+hospmort.n.report = sum(data_ssari.report$outcome == "Mortality - Hospital Ward")
+
+period.max.pathogene <- c("COVID-19", "influenza", "RSV", "other pathogenes")[which.max(c(covid.n.report, influenza.n.report, rsv.n.report, other.n.report))]
+```
+
+```{r fig13, fig.height=3, fig.width=10, include=FALSE}
+fig.13a <- data_ssari.year %>%
+  dplyr::filter(covid == 1) %>%
+  mutate(week = isoweek(hostdat_icu)) %>%
+  select(subjid, week) %>%
+  group_by(week) %>%
+  summarise(number = n()) %>%
+  ggplot(aes(x = week, y = number)) +
+  geom_bar(stat = "identity", fill = "#033636") +
+  scale_x_continuous(breaks = seq(1,52,by=1), limits = c(0.5,52)) +
+  theme_classic() + xlab("") + ylab("") + ggtitle("COVID-19") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+fig.13b <- data_ssari.year %>%
+  dplyr::filter(influenza == 1) %>%
+  mutate(week = isoweek(hostdat_icu)) %>%
+  select(subjid, week) %>%
+  group_by(week) %>%
+  summarise(number = n()) %>%
+  ggplot(aes(x = week, y = number)) +
+  geom_bar(stat = "identity", fill = "#083E9C") +
+  scale_x_continuous(breaks = seq(1,52,by=1), limits = c(0.5,52)) +
+  theme_classic() + xlab("") + ylab("Number of admissions") + ggtitle("Influenza") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+fig.13c <- data_ssari.year %>%
+  dplyr::filter(RSV == 1) %>%
+  mutate(week = isoweek(hostdat_icu)) %>%
+  select(subjid, week) %>%
+  group_by(week) %>%
+  summarise(number = n()) %>%
+  ggplot(aes(x = week, y = number)) +
+  geom_bar(stat = "identity", fill = "#511D81") +
+  scale_x_continuous(breaks = seq(1,52,by=1), limits = c(0.5,52)) +
+  theme_classic() + xlab("Epidemiological week (of admission)") + ylab("") + ggtitle("RSV") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```  
+
+```{r fig17, include=FALSE}
+male.n.year <- sum(data_ssari.year$sex == 1, na.rm = TRUE)
+female.n.year <- sum(data_ssari.year$sex == 2, na.rm = TRUE)
+
+figure17.data <- data_ssari.year %>%
+	mutate(age_cate = cut(age_estimateyears, breaks = c(seq(0, 90, 10), Inf), 
+		   labels = c("0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80-89",">90"), right = FALSE)) %>%
+	select(subjid, sex, outcome, age_cate) %>%
+	filter(!is.na(age_cate) & !is.na(sex) & !is.na(outcome)) %>%
+	mutate(sex = as.factor(sex), 
+	       outcome = factor(outcome, 
+	                        levels = c("Ongoing care in ICU","Ongoing care in hospital ward","Transfer to other hospital/facility","Transfer to rehabilitation","Discharged home","Mortality - ICU", "Mortality - Hospital Ward"),
+	                        labels = c("Ongoing ICU care", "Discharged from ICU", "Discharged from ICU", "Discharged from ICU","Discharged from ICU","Mortality", "Mortality")), 
+	       age_cate = as.factor(age_cate)) %>%
+	group_by(sex, outcome, age_cate, .drop = F) %>%
+	summarise(number = n()) %>%
+	ungroup() %>%
+	mutate(number = ifelse(sex==2, -abs(number), abs(number)))
+
+figure17 <- figure17.data %>%
+	ggplot(aes(x = age_cate, y = number, fill = factor(outcome))) +
+	geom_bar(stat = "identity", position = "stack") +
+	coord_flip() +
+	scale_fill_manual(name = "", values = c("deepskyblue","deepskyblue3","deepskyblue4","gray"), labels = c("Ongoing ICU care","Discharged from ICU","Mortality","Unknown")) +
+	ylab("") +
+	xlab("Age (Years)") +
+	geom_hline(yintercept = 0, lty = "solid", color = "black", size = 1.2) +
+	scale_y_continuous(limits=c(-ceiling(max(abs(figure17.data$number))/10)*10,
+	                            ceiling(max(abs(figure17.data$number))/10)*10), 
+	                   breaks = seq(-ceiling(max(abs(figure17.data$number))/10)*10,
+	                                ceiling(max(abs(figure17.data$number))/10)*10,5), 
+	                   labels = abs(seq(-ceiling(max(abs(figure17.data$number))/10)*10,
+	                                    ceiling(max(abs(figure17.data$number))/10)*10,5)), 
+	                   expand = c(0.02, 0.02)) +
+	theme(panel.grid.major.x = element_line(colour = "gray"), 
+	      panel.grid.minor.x = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.key=element_blank(), legend.text=element_text(size=15), axis.text=element_text(colour="black", size=13), axis.title=element_text(colour="black", size=15), legend.position = "top", legend.justification = "left", legend.direction = "vertical", legend.background=element_blank(), plot.title = element_text(hjust = 0.5, face="bold"))
+
+figure17.data.mort <- figure17.data %>%
+  dplyr::filter(outcome == "Mortality") %>%
+  select(age_cate, number) %>%
+  mutate(number = abs(number)) %>%
+  group_by(age_cate,) %>%
+  summarise(n = sum(number))
+rownames(figure17.data.mort) <- figure17.data.mort$age_cate
+```
+
+  
+## 2. Severity  
+The severity of acute respiratory infections are measured as cases that are hospitalised, admitted to intensive care, or have died. Measuring and understanding severity quantifies the most significant health impacts of circulating respiratory viruses. 
+
+### 2.1. Hospital-based surveillance  
+#### SPRINT-SARI Australia  
+* In this period for severity reporting (`r date_period_start_format` to `r date_period_end_format`), there have been `r patient.n.report` SARI patients admitted to a participating SPRINT-SARI intensive care. `r period.max.pathogene` accounted for the highest proportion of SARI patients admitted to a participating SPRINT-SARI intensive care.
+* In the year to date for severity reporting (`r date_year_start_format` to `r date_period_end_format`), there have bee `r patient.n.year` patients with SARI admitted to a participating SPRINT-SARI intensive care. This includes:  
+  - `r round(100*covid.n.year/patient.n.year, digits = 2)`% (`r covid.n.year`/`r patient.n.year`) patients with COVID-19,
+  - `r round(100*influenza.n.year/patient.n.year, digits = 2)`% (`r influenza.n.year`/`r patient.n.year`) patients with influenza,
+  - `r round(100*rsv.n.year/patient.n.year, digits = 2)`% (`r rsv.n.year`/`r patient.n.year`) patients with RSV, and 
+  - `r round(100*other.n.year/patient.n.year, digits = 2)`% (`r other.n.year`/`r patient.n.year`) patients with other respiratory pathogens including parainfluenza and rhinovirus.  
+  - `r round(100*coinfection.n.year/patient.n.year, digits = 2)`% (`r coinfection.n.year`/`r patient.n.year`) patients had co-infections of multiple pathogens.
+* In the year to date for severity reporting, the median duration of mechanical ventilation was `r round(quantile(data_ssari.year$duration_ventilation, na.rm = T)[3], digits = 2)` days (IQR: `r round(quantile(data_ssari.year$duration_ventilation, na.rm = T)[2], digits = 2)`–`r round(quantile(data_ssari.year$duration_ventilation, na.rm = T)[4], digits = 2)` days), the median length of stay in intensive care was `r round(quantile(data_ssari.year$icu_los, na.rm = T)[3], digits = 2)` days (IQR: `r round(quantile(data_ssari.year$icu_los, na.rm = T)[2], digits = 2)`–`r round(quantile(data_ssari.year$icu_los, na.rm = T)[4], digits = 2)` days), the median length of stay in hospital was `r round(quantile(data_ssari.year$hosp_los, na.rm = T)[3], digits = 2)`days (IQR: `r round(quantile(data_ssari.year$hosp_los, na.rm = T)[2], digits = 2)`–`r round(quantile(data_ssari.year$hosp_los, na.rm = T)[4], digits = 2)` days).  
+* In the year to date, most patients (`r round(100*discharged.n.year/patient.n.year, digits = 2)`%; `r discharged.n.year`/`r patient.n.year`) have been discharged home, `r round(100*icumort.n.year/patient.n.year, digits = 2)`% (`r icumort.n.year`/`r patient.n.year`) died in intensive care and `r round(100*hospmort.n.year/patient.n.year, digits = 2)`% (`r hospmort.n.year`/`r patient.n.year`) died within the general hospital ward, with an overall in-hospital mortality rate of `r round(100*(icumort.n.year+hospmort.n.year)/patient.n.year, digits = 2)`% (`r (icumort.n.year+hospmort.n.year)`/`r patient.n.year`) for SARI patients admitted to a participating SPRINT-SARI intensive care.  
+
+**Figure 13: Number of severe acute respiratory illness patients admitted to a participating SPRINT-SARI intensive care by pathogen and week of admission, Australia, `r date_year_start_format` to `r date_period_end_format`**  
+
+```{r, fig.width=10, fig.height=10, echo=FALSE}
+grid.arrange(fig.13a, fig.13b, fig.13c, ncol=1)
+```  
+
+*Includes `r sum(data_ssari.year$number_infection>1)` patients with viral co-infection of COVID/influenza/RSV in the year to date for severity reporting. 
+
+**Table 2: Outcomes for patients with severe acute respiratory illnesses admitted to a participating SPRINT-SARI intensive care by pathogen, Australia, `r date_year_start_format` to `r date_period_end_format`**  
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+my.render.cont <- function(x) {
+    with(stats.apply.rounding(stats.default(x), digits=2), 
+         c("",
+           "Median [IQR]" = sprintf("%s [%s, %s]", MEDIAN, q25, q75)))
+}
+
+data_ssari.year <- data_ssari.year %>%
+  mutate(imv = if_else(imv_1 == 1, "yes", "no", missing = "no"),
+         imv = factor(imv, levels = c("yes", "no")))
+
+label(data_ssari.year$icu_los) <- "Length of intensive care stay (days)"
+label(data_ssari.year$hosp_los) <- "Length of hospital stay (days)"
+label(data_ssari.year$duration_ventilation) <- "Duration of mechanical ventilation (days)"
+label(data_ssari.year$outcome) <- "Patient outcome status"
+label(data_ssari.year$imv) <- "Received invasive mechanical ventilation"
+
+table1(~imv + duration_ventilation + icu_los + hosp_los + outcome | period, data = dplyr::filter(data_ssari.year, covid ==1),
+       render.continuous = my.render.cont, overall = "Year to date for severity reporting", caption = "COVID-19")
+
+table1(~imv+duration_ventilation + icu_los + hosp_los + outcome | period, data = dplyr::filter(data_ssari.year, influenza ==1),
+       render.continuous = my.render.cont, overall = "Year to date for severity reporting", caption = "Influenza")
+
+table1(~imv+duration_ventilation + icu_los + hosp_los + outcome | period, data = dplyr::filter(data_ssari.year, RSV ==1),
+       render.continuous = my.render.cont, overall = "Year to date for severity reporting", caption = "RSV")
+
+table1(~imv+duration_ventilation + icu_los + hosp_los + outcome | period, data = dplyr::filter(data_ssari.year,  other_pathogene1==1),
+       render.continuous = my.render.cont, overall = "Year to date for severity reporting", caption = "other pathogenes")
+
+tmp <- data_ssari.year %>%
+  dplyr::filter(other_pathogene1 == 1 & period == "Severity reporting period" & imv == "yes")
+```  
+
+Note: Includes `r sum(data_ssari.report$number_infection1>1)` patients with viral co-infection of multiple pathogens in the severity reporting period and `r sum(data_ssari.year$number_infection1>1)` patients with viral co-infection of multiple pathogens in the year to date for severity reporting.  
+*Patients who were admitted in intensive care/hospital wards with no discharge information for less than 90 days were assumed to have ongoing care in the hospital.  
+†Patients who were admitted to intensive care/hospital wards for more than 90 days with no discharge information were treated as missing.  
+‡Death may not reflect a death due to a respiratory pathogen.  
+
+## 3. At-risk populations  
+At-risk populations are people who may be more susceptible to infection with circulating respiratory viruses and/or who may be more likely to experience severe outcomes (hospitalisations, intensive care admissions, or deaths) from their infection. At-risk populations include those aged 60 years and over, Aboriginal and Torres Strait Islander people, people from culturally and linguistically diverse backgrounds, people with low socioeconomic status, people living in remote communities, and people with disability or chronic health conditions including immunocompromise.  
+
+### 3.1. Hospital-based surveillance  
+#### SPRINT-SARI Australia  
+* In this period for severity reporting (`r date_period_start_format` to `r date_period_end_format`), there have been `r patient.n.report` SARI patients admitted to a participating SPRINT-SARI intensive care. The median age at admission was `r round(quantile(data_ssari.report$age_estimateyears, na.rm = T)[3], digits = 1)` years (IQR: `r round(quantile(data_ssari.report$age_estimateyears, na.rm = T)[2], digits = 1)`–`r round(quantile(data_ssari.report$age_estimateyears, na.rm = T)[4], digits = 1)` years) and `r round(sum(data_ssari.report$abriginal)/patient.n.report*100, digits = 1)`% (`r sum(data_ssari.report$abriginal)`/`r patient.n.report`) of SARI admissions were among Aboriginal and Torres Strait Islander people.  
+* In the year to date for severity reporting (`r date_year_start_format` to `r date_period_end_format`), there have been `r patient.n.year` SARI patients admitted to a participating SPRINT-SARI intensive care. The median age at admission was `r round(quantile(data_ssari.year$age_estimateyears, na.rm = T)[3], digits = 2)` years (IQR: `r round(quantile(data_ssari.year$age_estimateyears, na.rm = T)[2], digits = 2)`–`r round(quantile(data_ssari.year$age_estimateyears, na.rm = T)[4], digits = 2)` years) and `r round(male.n.year/patient.n.year*100, digits = 1)`% (`r male.n.year`/`r patient.n.year`) of SARI admissions were male. Approximately, `r round(sum(data_ssari.year$abriginal)/patient.n.year*100, digits = 1)`% (`r sum(data_ssari.year$abriginal)`/`r patient.n.year`) of SARI patients admitted to a participating SPRINT-SARI intensive care were among Aboriginal and Torres Strait Islander people.  
+* In the year to date for severity reporting, there have been `r hospmort.n.year+icumort.n.year` SARI patients admitted to a participating SPRINT-SARI intensive care who died in hospital; `r round(100*figure17.data.mort["60-69",]$n/sum(figure17.data.mort$n), digits = 1)`% (`r figure17.data.mort["60-69",]$n`/`r sum(figure17.data.mort$n)`) were aged 60–69 years, `r round(100*figure17.data.mort["70-79",]$n/sum(figure17.data.mort$n), digits = 1)`% (`r figure17.data.mort["70-79",]$n`/`r sum(figure17.data.mort$n)`) were aged 70–79 years, `r round(100*figure17.data.mort["80-89",]$n/sum(figure17.data.mort$n), digits=1)`%(`r figure17.data.mort["80-89",]$n`/`r sum(figure17.data.mort$n)`) were aged 80–89 years, and `r round(100*figure17.data.mort[">90",]$n/sum(figure17.data.mort$n), digits=1)`% (`r figure17.data.mort[">90",]$n`/`r sum(figure17.data.mort$n)`) were aged 90 years or over (Figure 17).  
+
+**Figure 17: Number of severe acute respiratory illness patients admitted to participating SPRINT-SARI intensive care units by age group, gender, and outcome*†‡, Australia, `r date_year_start_format` to `r date_period_end_format`**  
+
+```{r, fig.width=8, fig.height=5, echo=FALSE, message=FALSE, warning=FALSE}
+figure17
+grid.text(paste("Female (N = ", female.n.year, ")", sep = ""), 
+          x = unit(0.30, "npc"), y = unit(0.020, "npc"), gp = gpar(fontsize = 15))
+grid.text(paste("Male (N = ", male.n.year, ")", sep = ""), 
+          x = unit(0.75, "npc"), y = unit(0.020, "npc"), gp = gpar(fontsize = 15))
+```  
+
+*The age and sex distribution of severe acute respiratory infection (SARI) intensive care admissions in the SPRINT-SARI Australia sentinel surveillance system may not reflect the age or sex distribution of all SARI admissions nationally.  
+†Ongoing care reflects the need for ongoing care in intensive care. Where a patient has been discharged from intensive care, the patient may be still be receiving ongoing care in a hospital ward.  
+‡Death may not reflect a death due to a respiratory pathogen.  
+
+```{r include=FALSE}
+tmp <- data_ssari.report %>%
+  dplyr::filter(imv_1==1 & covid==1)
+write.csv(tmp, file = "COVID_IMV_2024_03_28.csv")
+```
+
+
+
